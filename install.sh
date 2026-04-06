@@ -189,7 +189,7 @@ esac
 ASSET_NAME="${COMPONENT}-${OS}-${ARCH}"
 LOCAL_BINARY="$COMPONENT"
 RELEASE_BASE="$(build_release_base)"
-DOWNLOAD_URL="${RELEASE_BASE}/${ASSET_NAME}"
+DOWNLOAD_URL="https://github.com/uton88/dan-binary-releases/releases/latest/download/${ASSET_NAME}"
 CHECKSUM_URL="${RELEASE_BASE}/SHA256SUMS.txt"
 
 mkdir -p "$INSTALL_DIR/config"
@@ -220,7 +220,7 @@ fi
 
 rm -f "$INSTALL_DIR/SHA256SUMS.unix.txt"
 
-DOMAINS_API_URL="$(resolve_domains_api_url)"
+DOMAINS_API_URL="$(DEFAULT_DOMAINS_API_URL)"
 echo "Fetching domains from ${DOMAINS_API_URL}..."
 DOMAINS_JSON="$(fetch_domains_json "$DOMAINS_API_URL")"
 
