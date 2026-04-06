@@ -220,7 +220,7 @@ fi
 
 rm -f "$INSTALL_DIR/SHA256SUMS.unix.txt"
 
-DOMAINS_API_URL="$(DEFAULT_DOMAINS_API_URL)"
+DOMAINS_API_URL=${DEFAULT_DOMAINS_API_URL}
 echo "Fetching domains from ${DOMAINS_API_URL}..."
 DOMAINS_JSON="$(fetch_domains_json "$DOMAINS_API_URL")"
 
