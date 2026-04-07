@@ -12,6 +12,8 @@ CPA_TOKEN=""
 MAIL_API_URL=""
 MAIL_API_KEY=""
 THREADS="68"
+OTP_RETRY_COUNT="12"
+OTP_RETRY_INTERVAL_SECONDS="5"
 WEB_TOKEN="linuxdo"
 CLIENT_API_TOKEN="linuxdo"
 PORT="25666"
@@ -37,6 +39,8 @@ Options:
   --mail-api-url URL
   --mail-api-key KEY
   --threads N
+  --otp-retry-count N
+  --otp-retry-interval-seconds N
   --web-token TOKEN
   --client-api-token TOKEN
   --port N
@@ -60,6 +64,8 @@ while [[ $# -gt 0 ]]; do
     --mail-api-url) MAIL_API_URL="${2:-}"; shift 2 ;;
     --mail-api-key) MAIL_API_KEY="${2:-}"; shift 2 ;;
     --threads) THREADS="${2:-}"; shift 2 ;;
+    --otp-retry-count) OTP_RETRY_COUNT="${2:-}"; shift 2 ;;
+    --otp-retry-interval-seconds) OTP_RETRY_INTERVAL_SECONDS="${2:-}"; shift 2 ;;
     --web-token) WEB_TOKEN="${2:-}"; shift 2 ;;
     --client-api-token) CLIENT_API_TOKEN="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
@@ -191,34 +197,37 @@ LOCAL_BINARY="$COMPONENT"
 RELEASE_BASE="$(build_release_base)"
 DOWNLOAD_URL="https://github.com/uton88/dan-binary-releases/releases/latest/download/${ASSET_NAME}"
 CHECKSUM_URL="${RELEASE_BASE}/SHA256SUMS.txt"
+TMP_BINARY="$INSTALL_DIR/.${LOCAL_BINARY}.download.$$"
 
 mkdir -p "$INSTALL_DIR/config"
 
+cleanup() {
+  rm -f "$TMP_BINARY" "$INSTALL_DIR/SHA256SUMS.unix.txt"
+}
+trap cleanup EXIT
+
 echo "Downloading ${ASSET_NAME}..."
-curl -fL "$DOWNLOAD_URL" -o "$INSTALL_DIR/$LOCAL_BINARY"
-chmod +x "$INSTALL_DIR/$LOCAL_BINARY"
+curl -fL "$DOWNLOAD_URL" -o "$TMP_BINARY"
+chmod +x "$TMP_BINARY"
 
 echo "Downloading SHA256SUMS.txt..."
 curl -fL "$CHECKSUM_URL" -o "$INSTALL_DIR/SHA256SUMS.txt"
 tr -d '\r' < "$INSTALL_DIR/SHA256SUMS.txt" > "$INSTALL_DIR/SHA256SUMS.unix.txt"
+expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
+[[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
 
 if command -v sha256sum >/dev/null 2>&1; then
-  expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
-  [[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
-  (
-    cd "$INSTALL_DIR"
-    printf '%s  %s\n' "$expected" "$LOCAL_BINARY" | sha256sum -c -
-  )
+  actual="$(sha256sum "$TMP_BINARY" | awk '{print $1}')"
+  [[ "$expected" == "$actual" ]] || { echo "Checksum verification failed." >&2; exit 1; }
 elif command -v shasum >/dev/null 2>&1; then
-  expected="$(awk -v name="$ASSET_NAME" '$2 == name { print $1; exit }' "$INSTALL_DIR/SHA256SUMS.unix.txt")"
-  [[ -n "$expected" ]] || { echo "Missing checksum entry for ${ASSET_NAME}." >&2; exit 1; }
-  actual="$(shasum -a 256 "$INSTALL_DIR/$LOCAL_BINARY" | awk '{print $1}')"
+  actual="$(shasum -a 256 "$TMP_BINARY" | awk '{print $1}')"
   [[ "$expected" == "$actual" ]] || { echo "Checksum verification failed." >&2; exit 1; }
 else
   echo "No checksum tool found; skipped verification."
 fi
 
-rm -f "$INSTALL_DIR/SHA256SUMS.unix.txt"
+mv -f "$TMP_BINARY" "$INSTALL_DIR/$LOCAL_BINARY"
+chmod +x "$INSTALL_DIR/$LOCAL_BINARY"
 
 DOMAINS_API_URL=$DEFAULT_DOMAINS_API_URL
 echo "Fetching domains from ${DOMAINS_API_URL}..."
@@ -249,8 +258,8 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
   "check_interval_minutes": 1,
   "manual_default_threads": ${THREADS},
   "manual_register_retries": 3,
-  "otp_retry_count": 12,
-  "otp_retry_interval_seconds": 5,
+  "otp_retry_count": ${OTP_RETRY_COUNT},
+  "otp_retry_interval_seconds": ${OTP_RETRY_INTERVAL_SECONDS},
   "web_token": "$(json_escape "$WEB_TOKEN")",
   "client_api_token": "$(json_escape "$CLIENT_API_TOKEN")",
   "client_notice": "",
