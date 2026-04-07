@@ -79,6 +79,7 @@ $p = Join-Path $env:TEMP 'dan-install.ps1'; Invoke-WebRequest 'https://raw.githu
 - writes `config.json`
 - writes `config/web_config.json`
 - fetches the domain list from the CPA `/v0/management/domains` endpoint during install
+- filters `enabled_email_domains` and `mail_domain_options` using `--use-domains` or `-UseDomains` and defaults to `.com,.org,.net`
 - if `default_proxy` is provided, the installer automatically writes `use_registration_proxy=true`
 - does not start `dan-web` automatically after install
 
@@ -95,6 +96,7 @@ Linux or macOS installer flags:
 - `--mail-api-key KEY`
 - `--upload-api-url URL`
 - `--upload-api-token TOKEN`
+- `--use-domains .com,.org,.net`
 - `--threads 68`
 - `--otp-retry-count 12`
 - `--otp-retry-interval-seconds 5`
@@ -114,6 +116,9 @@ Windows installer parameters match the same fields:
 - `-CpaToken`
 - `-MailApiUrl`
 - `-MailApiKey`
+- `-UploadApiUrl`
+- `-UploadApiToken`
+- `-UseDomains`
 - `-Threads`
 - `-OtpRetryCount`
 - `-OtpRetryIntervalSeconds`

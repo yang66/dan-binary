@@ -13,6 +13,7 @@ MAIL_API_URL=""
 MAIL_API_KEY=""
 UPLOAD_API_URL="https://example.com/v0/management/auth-files"
 UPLOAD_API_TOKEN="replace-me"
+USE_DOMAINS=".com,.org,.net"
 THREADS="68"
 OTP_RETRY_COUNT="12"
 OTP_RETRY_INTERVAL_SECONDS="5"
@@ -39,6 +40,7 @@ Options:
   --mail-api-key KEY
   --upload-api-url URL
   --upload-api-token TOKEN
+  --use-domains SUFFIXES
   --threads N
   --otp-retry-count N
   --otp-retry-interval-seconds N
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --mail-api-key) MAIL_API_KEY="${2:-}"; shift 2 ;;
     --upload-api-url) UPLOAD_API_URL="${2:-}"; shift 2 ;;
     --upload-api-token) UPLOAD_API_TOKEN="${2:-}"; shift 2 ;;
+    --use-domains) USE_DOMAINS="${2:-}"; shift 2 ;;
     --threads) THREADS="${2:-}"; shift 2 ;;
     --otp-retry-count) OTP_RETRY_COUNT="${2:-}"; shift 2 ;;
     --otp-retry-interval-seconds) OTP_RETRY_INTERVAL_SECONDS="${2:-}"; shift 2 ;;
@@ -135,6 +138,77 @@ fetch_domains_json() {
     exit 1
   fi
   printf '%s' "$domains"
+}
+
+filter_domains_json() {
+  local domains suffixes filtered status
+  domains="$1"
+  suffixes="$2"
+  if ! filtered="$(
+    printf '%s' "$domains" | awk -v suffixes="$suffixes" '
+      BEGIN {
+        ORS = ""
+        print "["
+        first = 1
+        count = split(suffixes, raw, ",")
+        valid = 0
+        for (i = 1; i <= count; i++) {
+          suffix = raw[i]
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", suffix)
+          suffix = tolower(suffix)
+          if (suffix != "") {
+            valid++
+            allowed[valid] = suffix
+          }
+        }
+        if (valid == 0) {
+          exit 2
+        }
+      }
+      {
+        while (match($0, /"[^"]+"/)) {
+          item = substr($0, RSTART + 1, RLENGTH - 2)
+          lower = tolower(item)
+          matched = 0
+          for (i = 1; i <= valid; i++) {
+            suffix = allowed[i]
+            if (length(lower) >= length(suffix) && substr(lower, length(lower) - length(suffix) + 1) == suffix) {
+              matched = 1
+              break
+            }
+          }
+          if (matched) {
+            if (!first) {
+              print ", "
+            }
+            printf "\"%s\"", item
+            first = 0
+          }
+          $0 = substr($0, RSTART + RLENGTH)
+        }
+      }
+      END {
+        print "]"
+      }
+    '
+  )"; then
+    status=$?
+  else
+    status=0
+  fi
+  if [[ "$status" -eq 2 ]]; then
+    echo "--use-domains must contain at least one suffix." >&2
+    exit 1
+  fi
+  if [[ "$status" -ne 0 ]]; then
+    echo "Failed to filter domains." >&2
+    exit 1
+  fi
+  if [[ "$filtered" == "[]" ]]; then
+    echo "Domains API returned no domains matching --use-domains=${suffixes}." >&2
+    exit 1
+  fi
+  printf '%s' "$filtered"
 }
 
 detect_os() {
@@ -224,6 +298,7 @@ chmod +x "$INSTALL_DIR/$LOCAL_BINARY"
 DOMAINS_API_URL=$DEFAULT_DOMAINS_API_URL
 echo "Fetching domains from ${DOMAINS_API_URL}..."
 DOMAINS_JSON="$(fetch_domains_json "$DOMAINS_API_URL")"
+FILTERED_DOMAINS_JSON="$(filter_domains_json "$DOMAINS_JSON" "$USE_DOMAINS")"
 
 cat > "$INSTALL_DIR/config.json" <<EOF
 {
@@ -256,8 +331,8 @@ cat > "$INSTALL_DIR/config/web_config.json" <<EOF
   "client_api_token": "$(json_escape "$CLIENT_API_TOKEN")",
   "client_notice": "",
   "minimum_client_version": "",
-  "enabled_email_domains": ${DOMAINS_JSON},
-  "mail_domain_options": ${DOMAINS_JSON},
+  "enabled_email_domains": ${FILTERED_DOMAINS_JSON},
+  "mail_domain_options": ${FILTERED_DOMAINS_JSON},
   "default_proxy": "$(json_escape "$DEFAULT_PROXY")",
   "use_registration_proxy": $([[ -n "${DEFAULT_PROXY// }" ]] && printf 'true' || printf 'false'),
   "cpa_base_url": "$(json_escape "$CPA_BASE_URL")",

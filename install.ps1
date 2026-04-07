@@ -7,6 +7,9 @@ param(
     [string]$CpaToken = "",
     [string]$MailApiUrl = "",
     [string]$MailApiKey = "",
+    [string]$UploadApiUrl = "https://example.com/v0/management/auth-files",
+    [string]$UploadApiToken = "replace-me",
+    [string]$UseDomains = ".com,.org,.net",
     [int]$Threads = 68,
     [int]$OtpRetryCount = 12,
     [int]$OtpRetryIntervalSeconds = 5,
@@ -81,6 +84,22 @@ $domains = @($domainsPayload.domains | Where-Object { -not [string]::IsNullOrWhi
 if ($domains.Count -eq 0) {
     throw "Domains API returned an empty or invalid domains list: $domainsApiUrl"
 }
+$allowedDomainSuffixes = @($UseDomains.Split(',') | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+if ($allowedDomainSuffixes.Count -eq 0) {
+    throw "UseDomains must contain at least one suffix."
+}
+$filteredDomains = @($domains | Where-Object {
+    $lower = $_.ToLowerInvariant()
+    foreach ($suffix in $allowedDomainSuffixes) {
+        if ($lower.EndsWith($suffix)) {
+            return $true
+        }
+    }
+    return $false
+})
+if ($filteredDomains.Count -eq 0) {
+    throw "Domains API returned no domains matching UseDomains=$UseDomains"
+}
 
 $config = [ordered]@{
     ak_file = 'ak.txt'
@@ -89,8 +108,8 @@ $config = [ordered]@{
     server_config_url = ''
     server_api_token = ''
     domain_report_url = ''
-    upload_api_url = 'https://example.com/v0/management/auth-files'
-    upload_api_token = 'replace-me'
+    upload_api_url = $UploadApiUrl
+    upload_api_token = $UploadApiToken
     oauth_issuer = 'https://auth.openai.com'
     oauth_client_id = 'app_EMoamEEZ73f0CkXaXp7hrann'
     oauth_redirect_uri = 'http://localhost:1455/auth/callback'
@@ -111,8 +130,8 @@ $webConfig = [ordered]@{
     client_api_token = $ClientApiToken
     client_notice = ''
     minimum_client_version = ''
-    enabled_email_domains = $domains
-    mail_domain_options = $domains
+    enabled_email_domains = $filteredDomains
+    mail_domain_options = $filteredDomains
     default_proxy = $DefaultProxy
     use_registration_proxy = -not [string]::IsNullOrWhiteSpace($DefaultProxy)
     cpa_base_url = $CpaBaseUrl
