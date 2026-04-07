@@ -11,6 +11,8 @@ CPA_BASE_URL=""
 CPA_TOKEN=""
 MAIL_API_URL=""
 MAIL_API_KEY=""
+UPLOAD_API_URL="https://example.com/v0/management/auth-files"
+UPLOAD_API_TOKEN="replace-me"
 THREADS="68"
 OTP_RETRY_COUNT="12"
 OTP_RETRY_INTERVAL_SECONDS="5"
@@ -21,9 +23,6 @@ DEFAULT_PROXY=""
 DEFAULT_DOMAINS_API_URL="https://gpt-up.icoa.pp.ua/v0/management/domains"
 SYSTEMD="0"
 SERVICE_NAME="dan-web"
-BACKGROUND="0"
-LOG_FILE=""
-PID_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -38,6 +37,8 @@ Options:
   --cpa-token TOKEN
   --mail-api-url URL
   --mail-api-key KEY
+  --upload-api-url URL
+  --upload-api-token TOKEN
   --threads N
   --otp-retry-count N
   --otp-retry-interval-seconds N
@@ -47,9 +48,6 @@ Options:
   --default-proxy URL
   --systemd
   --service-name NAME
-  --background
-  --log-file PATH
-  --pid-file PATH
   -h, --help
 EOF
 }
@@ -63,6 +61,8 @@ while [[ $# -gt 0 ]]; do
     --cpa-token) CPA_TOKEN="${2:-}"; shift 2 ;;
     --mail-api-url) MAIL_API_URL="${2:-}"; shift 2 ;;
     --mail-api-key) MAIL_API_KEY="${2:-}"; shift 2 ;;
+    --upload-api-url) UPLOAD_API_URL="${2:-}"; shift 2 ;;
+    --upload-api-token) UPLOAD_API_TOKEN="${2:-}"; shift 2 ;;
     --threads) THREADS="${2:-}"; shift 2 ;;
     --otp-retry-count) OTP_RETRY_COUNT="${2:-}"; shift 2 ;;
     --otp-retry-interval-seconds) OTP_RETRY_INTERVAL_SECONDS="${2:-}"; shift 2 ;;
@@ -72,9 +72,6 @@ while [[ $# -gt 0 ]]; do
     --default-proxy) DEFAULT_PROXY="${2:-}"; shift 2 ;;
     --systemd) SYSTEMD="1"; shift ;;
     --service-name) SERVICE_NAME="${2:-}"; shift 2 ;;
-    --background) BACKGROUND="1"; shift ;;
-    --log-file) LOG_FILE="${2:-}"; shift 2 ;;
-    --pid-file) PID_FILE="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -178,11 +175,6 @@ if [[ "$SYSTEMD" == "1" && "$OS" != "linux" ]]; then
   exit 1
 fi
 
-if [[ "$SYSTEMD" == "1" && "$BACKGROUND" == "1" ]]; then
-  echo "--systemd and --background cannot be used together." >&2
-  exit 1
-fi
-
 if [[ "$SYSTEMD" == "1" && "$INSTALL_DIR" == "$PWD/dan-runtime" ]]; then
   INSTALL_DIR="/opt/dan-runtime"
 fi
@@ -241,8 +233,8 @@ cat > "$INSTALL_DIR/config.json" <<EOF
   "server_config_url": "",
   "server_api_token": "",
   "domain_report_url": "",
-  "upload_api_url": "https://example.com/v0/management/auth-files",
-  "upload_api_token": "replace-me",
+  "upload_api_url": "$(json_escape "$UPLOAD_API_URL")",
+  "upload_api_token": "$(json_escape "$UPLOAD_API_TOKEN")",
   "oauth_issuer": "https://auth.openai.com",
   "oauth_client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
   "oauth_redirect_uri": "http://localhost:1455/auth/callback",
@@ -304,26 +296,6 @@ WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload
-  systemctl enable --now "${SERVICE_NAME}.service"
-fi
-
-if [[ "$BACKGROUND" == "1" ]]; then
-  LOG_FILE="${LOG_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.log}"
-  PID_FILE="${PID_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.pid}"
-
-  if [[ -f "$PID_FILE" ]]; then
-    old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-    if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
-      kill "$old_pid" 2>/dev/null || true
-      sleep 1
-    fi
-  fi
-
-  (
-    cd "$INSTALL_DIR"
-    nohup "./${LOCAL_BINARY}" >> "$LOG_FILE" 2>&1 &
-    echo $! > "$PID_FILE"
-  )
 fi
 
 echo
@@ -333,16 +305,12 @@ echo "Config: $INSTALL_DIR/config/web_config.json"
 echo
 if [[ "$SYSTEMD" == "1" ]]; then
   echo "Service: ${SERVICE_NAME}.service"
+  echo "Start manually:"
+  echo "  systemctl enable ${SERVICE_NAME}.service"
+  echo "  systemctl start ${SERVICE_NAME}.service"
   echo "Check:"
   echo "  systemctl status ${SERVICE_NAME}.service"
   echo "  journalctl -u ${SERVICE_NAME}.service -f"
-elif [[ "$BACKGROUND" == "1" ]]; then
-  echo "Background process started."
-  echo "Log: ${LOG_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.log}"
-  echo "PID: ${PID_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.pid}"
-  echo "Check:"
-  echo "  tail -f ${LOG_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.log}"
-  echo "  cat ${PID_FILE:-$INSTALL_DIR/${LOCAL_BINARY}.pid}"
 else
   echo "Start command:"
   echo "  cd \"$INSTALL_DIR\" && ./${LOCAL_BINARY}"

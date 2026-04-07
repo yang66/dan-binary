@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/uton88/dan-binary-releases/main/ins
   --threads 68
 ```
 
-Debian or Ubuntu one-click install with systemd:
+Debian or Ubuntu install with systemd unit:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uton88/dan-binary-releases/main/install.sh | bash -s -- \
@@ -33,12 +33,11 @@ curl -fsSL https://raw.githubusercontent.com/uton88/dan-binary-releases/main/ins
   --threads 68
 ```
 
-No-root Linux one-click install and background run:
+No-root Linux or macOS install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uton88/dan-binary-releases/main/install.sh | bash -s -- \
   --install-dir "$HOME/dan-runtime" \
-  --background \
   --cpa-base-url 'https://gpt-up.example.com/' \
   --cpa-token 'replace-me' \
   --mail-api-url 'https://gpt-mail.example.com/' \
@@ -51,7 +50,6 @@ Linux or macOS with proxy:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/uton88/dan-binary-releases/main/install.sh | bash -s -- \
   --install-dir "$HOME/dan-runtime" \
-  --background \
   --default-proxy 'socks5://user:pass@127.0.0.1:1080' \
   --cpa-base-url 'https://gpt-up.example.com/' \
   --cpa-token 'replace-me' \
@@ -82,6 +80,7 @@ $p = Join-Path $env:TEMP 'dan-install.ps1'; Invoke-WebRequest 'https://raw.githu
 - writes `config/web_config.json`
 - fetches the domain list from the CPA `/v0/management/domains` endpoint during install
 - if `default_proxy` is provided, the installer automatically writes `use_registration_proxy=true`
+- does not start `dan-web` automatically after install
 
 ## Optional parameters
 
@@ -94,6 +93,8 @@ Linux or macOS installer flags:
 - `--cpa-token TOKEN`
 - `--mail-api-url URL`
 - `--mail-api-key KEY`
+- `--upload-api-url URL`
+- `--upload-api-token TOKEN`
 - `--threads 68`
 - `--otp-retry-count 12`
 - `--otp-retry-interval-seconds 5`
@@ -103,9 +104,6 @@ Linux or macOS installer flags:
 - `--default-proxy URL`
 - `--systemd`
 - `--service-name dan-web`
-- `--background`
-- `--log-file /path/to/dan-web.log`
-- `--pid-file /path/to/dan-web.pid`
 
 Windows installer parameters match the same fields:
 
